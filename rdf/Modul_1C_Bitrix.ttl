@@ -1,0 +1,63 @@
+@prefix cqcore: <https://kb.moneta.ru/terms/common/cqontology#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix : <https://kb.moneta.ru/instances/doc/> .
+@prefix cqcore: <https://kb.moneta.ru/terms/common/cqontology#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:kassa_payanyway_instruction a cqcore:TextDocument ;
+    dcterms:title "Инструкция по использованию сервиса kassa.payanyway.ru"@ru ;
+    dcterms:source <https://kassa.payanyway.ru/instruction> ;
+    dcterms:format "md" ;
+    dcterms:abstract "Документ описывает назначение и функционал сервиса kassa.payanyway.ru, порядок настройки счёта и сервиса для отправки запросов на фискализацию чеков (включая настройку Pay URL), а также особенности обработки возвратов и авторизации интернет-магазина."@ru ;
+    dcterms:extent "1953"^^xsd:integer ;
+    dcterms:created "2026-02-05 .
+
+:CQ_01 a cqcore:quest ;
+  cqcore:content "Как настроить Pay URL для интеграции с kassa.payanyway.ru?" ;
+  dcterms:description '''В настройках вашего расширенного счёта в личном кабинете системы PayAnyWay.ru установите в поле Pay URL ссылку на сервис: https://kassa.payanyway.ru/index.php?do=invoicepayurl, а в настройках сервиса kassa.payanyway.ru установите ссылку на Pay URL вашего интернет-магазина. Запрос на фискализацию чека будет отправлен в онлайн кассу через сервис kassa.payanyway.ru, а запрос на Pay URL магазина будет проходить транзитом через сервис.''' .
+
+:CQ_02 a cqcore:quest ;
+  cqcore:content "Как авторизоваться в сервисе kassa.payanyway.ru?" ;
+  dcterms:description '''Для авторизации в сервисе kassa.payanyway.ru на странице Входа (https://kassa.payanyway.ru/index.php?show=userlogin) необходимо ввести логин и пароль интернет-магазина, полученный при регистрации в PayAnyWay, а так же указать номер расширенного счёта интернет-магазина.''' .
+
+:CQ_03 a cqcore:quest ;
+  cqcore:content "Как автоматизировать формирование чека при возврате средств? Какой URL нужно указать?" ;
+  dcterms:description '''При возврате средств по операциям оплаты чек сформируется автоматически только если установить в настройках счета действие при зачислении/списании средств “Вызвать URL после списания средств”. Значение данного поля должно быть таким: https://kassa.payanyway.ru/index.php?do=notifyrefund''' .
+
+:CQ_04 a cqcore:quest ;
+  cqcore:content "Где посмотреть список чеков и детальный лог отправки запросов в онлайн-кассу?" ;
+  dcterms:description '''Для контроля за интеграцией вы можете просматривать чеки и детальный лог отправки запросов в онлайн кассу и получения ответов от кассы: https://kassa.payanyway.ru/index.php?show=userchecklist''' .
+
+:CQ_05 a cqcore:quest ;
+  cqcore:content "Кто отправляет электронный чек покупателю и как он доставляется?" ;
+  dcterms:description '''Обязанность по визуальному представлению электронного чека, а так же его доставка на e-mail покупателя законом 54-ФЗ возложена на ОФД. При совершении покупки, пользователь вашего интернет-магазина получит от вашего ОФД ссылку на электронный чек или его фискальные данные, в зависимости от ОФД.''' .
+
+:CQ_06 a cqcore:quest ;
+  cqcore:content "Как обеспечить отображение номенклатуры в чеках? Что делать, если моей CMS нет в списке?" ;
+  dcterms:description '''Список CMS, которые передают номенклатуру: https://www.payanyway.ru/info/p/ru/public/merchants/PayAnyWay54FZCMSlist.pdf (PDF). Для отображения номенклатуры в чеках нужно обновить платежный модуль PayAnyWay для вашей CMS: https://www.payanyway.ru/info/w/ru/public/w/partnership/developers/cms.html. Если используемой вами CMS ещё нет в данном списке, чек будет фискализироваться без номенклатуры.''' .
+
+:CQ_07 a cqcore:quest ;
+  cqcore:content "Как принимать оплату без интернет-магазина через kassa.payanyway.ru?" ;
+  dcterms:description '''Установите ссылку на Pay URL: https://kassa.payanyway.ru/index.php?do=invoicepayurl. Используйте механизм ручного выставления ссылок (https://kassa.payanyway.ru/index.php?show=userinvoicelist) с указанием товарных позиций для отправки покупателям ссылки на оплату.''' .
+
+:CQ_08 a cqcore:quest ;
+  cqcore:content "Что делать, если у меня только лендинг (как встроить корзину)?" ;
+  dcterms:description '''Используйте генератор корзины для вставки в облачные CMS или на лендинг: FormConstructorKassaPAW (https://kassa.payanyway.ru/FormConstructorKassaPAW.pdf?v=3).''' .
+
+:CQ_09 a cqcore:quest ;
+  cqcore:content "Какие онлайн-кассы поддерживает сервис kassa.payanyway.ru?" ;
+  dcterms:description '''Поддерживаемые онлайн кассы: МодульКасса; БПА ПА PayAnyWay; CloudKassir; АТОЛ онлайн; Бухсофт онлайн-касса; Комтет онлайн-касса; i?Retail; Оранж Дата; Дримкас; Бизнес.ру Онлайн-Чеки; Nanokassa; Ferma; 1С-Рарус; E-COM Kassa; Kit Online; Счётмаш; СТАРРУС; Чек-онлайн; Инитпро; Первый ОФД (облачная касса); LIFE PAY; СБИС; Эвотор (Цифровая касса); Digitalkassa.''' .
+
+:CQ_10 a cqcore:quest ;
+  cqcore:content "Откуда сервис получает данные о покупателе и номенклатуре и где описан формат данных?" ;
+  dcterms:description '''Сервис предназначен для формирования запросов в онлайн кассу для фискализации чеков. Данные о покупателе и номенклатуре сервис получает от интернет-магазина, который готовит их в формате, описанном в документации Assistant54FZ (https://www.payanyway.ru/info/p/ru/public/merchants/Assistant54FZ.pdf).''' .
+
+:CQ_11 a cqcore:quest ;
+  cqcore:content "Куда отправляются ссылки на чек (на какой e-mail они приходят)?" ;
+  dcterms:description '''Ссылки на чек будут отправляться на e-mail, указанный магазином в настройках сервиса, либо на основании данных о покупателе, переданных интернет-магазином, согласно документации (п.1).''' .
+
+:CQ_12 a cqcore:quest ;
+  cqcore:content "Где находится страница входа в сервис kassa.payanyway.ru?" ;
+  dcterms:description '''Для входа в сервис перейдите по ссылке: https://kassa.payanyway.ru/index.php?show=userlogin''' .
+
+
