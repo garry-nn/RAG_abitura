@@ -9,7 +9,7 @@ r = redis.Redis(
     decode_responses=True
 )
 
-#  ожидание Redis
+# ожидание Redis
 for i in range(10):
     try:
         if r.ping():
@@ -22,19 +22,39 @@ else:
     raise Exception("Redis not available")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FILE_PATH = os.path.join(BASE_DIR, "..", "chunks", "doc_id_chunks.json")
+CHUNKS_DIR = os.path.join(BASE_DIR, "..", "chunks")
 
-with open(FILE_PATH, "r", encoding="utf-8") as f:
-    chunks = json.load(f)
+FILES = [f for f in os.listdir(CHUNKS_DIR) if f.endswith(".json")]
 
-#  проверка ДО загрузки
-if r.exists(f"chunk:{chunks[0]['id']}"):
-    print("Данные уже загружены")
-    exit()
+total_loaded = 0
 
-# загрузка
-for chunk in chunks:
-    key = f"chunk:{chunk['id']}"
-    r.set(key, json.dumps(chunk))
+for filename in FILES:
+    file_path = os.path.join(CHUNKS_DIR, filename)
 
-print(f"Загружено чанков: {len(chunks)}")
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            chunks = json.load(f)
+    except Exception as e:
+        print(f"{filename}: ошибка чтения → {e}")
+        continue
+
+    if not chunks:
+        print(f"{filename}: пустой файл")
+        continue
+
+    pipe = r.pipeline()
+    loaded = 0
+
+    for chunk in chunks:
+        key = f"{filename}:chunk:{chunk['id']}"  # namespace по файлу
+
+        if not r.exists(key):
+            pipe.set(key, json.dumps(chunk))
+            loaded += 1
+
+    pipe.execute()
+
+    print(f"{filename}: добавлено {loaded} новых чанков")
+    total_loaded += loaded
+
+print(f"Всего добавлено: {total_loaded}")
