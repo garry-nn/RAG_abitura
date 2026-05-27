@@ -105,7 +105,7 @@ print(f"Всего чанков загружено: {total_chunks}")
 
 #  Тестовый запрос
 
-test_question = "Какие документы нужны для поступления на програмную ижинерию?"
+test_question = "нужен ли СНИЛС для поступления на ФИиВТ?"
 
 question_embedding = embed_query(test_question)
 question_embedding = np.array([question_embedding])
