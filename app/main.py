@@ -110,7 +110,6 @@ test_question = "нужен ли СНИЛС для поступления на �
 question_embedding = embed_query(test_question)
 question_embedding = np.array([question_embedding])
 
-
 # Поиск сходства 
 distances = cdist(
     question_embedding,
