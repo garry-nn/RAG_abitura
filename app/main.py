@@ -1,66 +1,145 @@
 import redis
 import json
 import numpy as np
+import torch
+import torch.nn.functional as F
+from transformers import AutoTokenizer, AutoModel
 from scipy.spatial.distance import cdist
 
-# импорт твоего Embedder
-from assistent_class import Embedder 
-
-# Redis подключение
+#  Redis 
 r = redis.Redis(
-    host='localhost',
+    host="localhost",
     port=6379,
     decode_responses=True
 )
 
-print("Redis:", r.ping())
+print("Redis connected:", r.ping())
 
-# Загружаем чанки из Redis
-keys = r.keys("chunk:*")
+#  Модель трансформера 
+MODEL_NAME = "intfloat/multilingual-e5-large"
+
+print("Loading embedding model...")
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModel.from_pretrained(MODEL_NAME)
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+model = model.to(device)
+model.eval()
+
+print(f"Model loaded on {device}")
+
+
+#  Эмбэдинг функция
+def average_pool(last_hidden_states, attention_mask):
+    last_hidden = last_hidden_states.masked_fill(
+        ~attention_mask[..., None].bool(),
+        0.0
+    )
+
+    return last_hidden.sum(dim=1) / attention_mask.sum(dim=1)[..., None]
+
+
+def embed_query(text: str):
+    """
+    Для E5 query обязательно с prefix query:
+    """
+
+    formatted_text = f"query: {text}"
+
+    batch = tokenizer(
+        [formatted_text],
+        max_length=512,
+        padding=True,
+        truncation=True,
+        return_tensors="pt"
+    )
+
+    batch = {k: v.to(device) for k, v in batch.items()}
+
+    with torch.no_grad():
+        outputs = model(**batch)
+
+    embeddings = average_pool(
+        outputs.last_hidden_state,
+        batch["attention_mask"]
+    )
+
+    embeddings = F.normalize(embeddings, p=2, dim=1)
+
+    return embeddings[0].cpu().numpy()
+
+
+# Загрузка чанков
+pattern = "*:chunk:*"
 
 chunks = []
-for key in keys:
-    chunk = json.loads(r.get(key))
-    chunks.append(chunk)
-
-print(f"Загружено чанков из Redis: {len(chunks)}")
-
-# Эмбеддер
-embedder = Embedder()
-
-
-# ТЕСТОВЫЙ ВОПРОС
-
-test_question = "Какие документы нужны для поступления?"
-
-# эмбеддинг вопроса
-question_emb = embedder.embedding(test_question)
-question_emb = np.array([question_emb])
-
-
-# Эмбеддинг чанков
-
 chunk_embeddings = []
-for chunk in chunks:
-    emb = embedder.embedding(chunk["content"])  # или "text"
-    chunk_embeddings.append(emb)
+total_chunks = 0
 
-chunk_embeddings = np.array(chunk_embeddings)
+for key in r.scan_iter(match=pattern):
 
-# Поиск (cosine similarity)
-dist = cdist(question_emb, chunk_embeddings, metric="cosine")
-sim = 1 - dist.flatten()
+    raw = r.get(key)
 
-# сортировка
+    if not raw:
+        continue
+
+    try:
+        chunk = json.loads(raw)
+
+        if "embedding" not in chunk:
+            continue
+
+        # сохраняем redis key внутрь chunk
+        chunk["_redis_key"] = key
+
+        chunks.append(chunk)
+        chunk_embeddings.append(chunk["embedding"])
+        total_chunks += 1
+
+    except Exception as e:
+        print(f"Ошибка чтения {key}: {e}")
+
+print(f"Всего чанков загружено: {total_chunks}")
+
+#  Тестовый запрос
+
+test_question = "нужен ли СНИЛС для поступления на ФИиВТ?"
+
+question_embedding = embed_query(test_question)
+question_embedding = np.array([question_embedding])
+
+# Поиск сходства 
+distances = cdist(
+    question_embedding,
+    chunk_embeddings,
+    metric="cosine"
+)
+
+similarities = 1 - distances.flatten()
+
 top_k = 3
-top_indices = np.argsort(dist.flatten())[:top_k]
 
-# Вывод результатов
-print("\nВопрос:", test_question)
-print("\nТоп ответов:\n")
+top_indices = np.argsort(distances.flatten())[:top_k]
 
-for i in top_indices:
-    print("----")
-    print(f"chunk_id: {chunks[i]['id']}")
-    print(f"score: {round(sim[i], 3)}")
-    print(chunks[i]["content"])
+
+#  Результат 
+print("\n==============================")
+print("Ваш запрос :")
+print(test_question)
+
+print("\nTOP RESULTS:\n")
+
+for idx in top_indices:
+
+    chunk = chunks[idx]
+
+    print("--------------------------------------------------")
+    print(f"SCORE: {round(similarities[idx], 4)}")
+    print(f"KEY: {chunk.get('_redis_key')}")
+    print(f"SECTION: {chunk.get('section')}")
+    print(f"SOURCE: {chunk.get('source')}")
+    print()
+    print(chunk.get("content"))
+    print("--------------------------------------------------")
