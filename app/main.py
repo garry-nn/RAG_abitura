@@ -1,145 +1,110 @@
-import redis
-import json
-import numpy as np
-import torch
-import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModel
-from scipy.spatial.distance import cdist
 
-#  Redis 
-r = redis.Redis(
-    host="localhost",
-    port=6379,
-    decode_responses=True
+import asyncio
+
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters
 )
 
-print("Redis connected:", r.ping())
+from top_chunks.retriever import TopChunksRetriever
+from llm.giga_generator import generate_rag_answer
 
-#  Модель трансформера 
-MODEL_NAME = "intfloat/multilingual-e5-large"
-
-print("Loading embedding model...")
-
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModel.from_pretrained(MODEL_NAME)
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-model = model.to(device)
-model.eval()
-
-print(f"Model loaded on {device}")
+from utils.logger import (
+    log_question,
+    log_chunks
+)
 
 
-#  Эмбэдинг функция
-def average_pool(last_hidden_states, attention_mask):
-    last_hidden = last_hidden_states.masked_fill(
-        ~attention_mask[..., None].bool(),
-        0.0
+TOKEN = "8101923743:AAEMx1AzEu6kvzqzg6zJ62D6TZIjQoHBVRM"
+
+
+# ---------------- RAG PIPELINE ----------------
+
+def run_rag(question: str) -> str:
+
+    # save question
+    log_question(question)
+
+    retriever = TopChunksRetriever()
+
+    # retrieve chunks
+    chunks = retriever.get_top_chunks(question)
+
+    # save retrieved chunks
+    
+
+    # sort by score
+    chunks = sorted(
+        chunks,
+        key=lambda x: x.get("score", 0),
+        reverse=True
+    )[:5]
+    log_chunks(question, chunks)
+
+    # generate answer
+    return generate_rag_answer(
+        query=question,
+        chunks=chunks
     )
 
-    return last_hidden.sum(dim=1) / attention_mask.sum(dim=1)[..., None]
 
+# ---------------- HANDLERS ----------------
 
-def embed_query(text: str):
-    """
-    Для E5 query обязательно с prefix query:
-    """
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
-    formatted_text = f"query: {text}"
-
-    batch = tokenizer(
-        [formatted_text],
-        max_length=512,
-        padding=True,
-        truncation=True,
-        return_tensors="pt"
+    await update.message.reply_text(
+        "Привет 👋 Я RAG-бот по поступлению. Задай вопрос."
     )
 
-    batch = {k: v.to(device) for k, v in batch.items()}
 
-    with torch.no_grad():
-        outputs = model(**batch)
+async def handle_message(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
-    embeddings = average_pool(
-        outputs.last_hidden_state,
-        batch["attention_mask"]
+    user_text = update.message.text
+
+    await update.message.reply_text(
+        "⏳ Думаю..."
     )
-
-    embeddings = F.normalize(embeddings, p=2, dim=1)
-
-    return embeddings[0].cpu().numpy()
-
-
-# Загрузка чанков
-pattern = "*:chunk:*"
-
-chunks = []
-chunk_embeddings = []
-total_chunks = 0
-
-for key in r.scan_iter(match=pattern):
-
-    raw = r.get(key)
-
-    if not raw:
-        continue
 
     try:
-        chunk = json.loads(raw)
-
-        if "embedding" not in chunk:
-            continue
-
-        # сохраняем redis key внутрь chunk
-        chunk["_redis_key"] = key
-
-        chunks.append(chunk)
-        chunk_embeddings.append(chunk["embedding"])
-        total_chunks += 1
+        answer = run_rag(user_text)
 
     except Exception as e:
-        print(f"Ошибка чтения {key}: {e}")
+        answer = f"Ошибка: {str(e)}"
 
-print(f"Всего чанков загружено: {total_chunks}")
-
-#  Тестовый запрос
-
-test_question = "нужен ли СНИЛС для поступления на ФИиВТ?"
-
-question_embedding = embed_query(test_question)
-question_embedding = np.array([question_embedding])
-
-# Поиск сходства 
-distances = cdist(
-    question_embedding,
-    chunk_embeddings,
-    metric="cosine"
-)
-
-similarities = 1 - distances.flatten()
-
-top_k = 3
-
-top_indices = np.argsort(distances.flatten())[:top_k]
+    await update.message.reply_text(answer)
 
 
-#  Результат 
-print("\n==============================")
-print("Ваш запрос :")
-print(test_question)
+# ---------------- MAIN ----------------
 
-print("\nTOP RESULTS:\n")
+def main():
 
-for idx in top_indices:
+    app = Application.builder().token(TOKEN).build()
 
-    chunk = chunks[idx]
+    app.add_handler(
+        CommandHandler("start", start)
+    )
 
-    print("--------------------------------------------------")
-    print(f"SCORE: {round(similarities[idx], 4)}")
-    print(f"KEY: {chunk.get('_redis_key')}")
-    print(f"SECTION: {chunk.get('section')}")
-    print(f"SOURCE: {chunk.get('source')}")
-    print()
-    print(chunk.get("content"))
-    print("--------------------------------------------------")
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_message
+        )
+    )
+
+    print("Bot started...")
+
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
